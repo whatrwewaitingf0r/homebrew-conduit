@@ -36,22 +36,15 @@ Conduit is a DIY development environment for working with AI coding agents:
 ## Development
 
 ```bash
+# Clone the repo
+git clone https://github.com/whatrwewaitingf0r/homebrew-conduit.git
+cd homebrew-conduit
+
 # Validate syntax
-brew style ~/0/BREW_DEV/homebrew-conduit/Casks/conduit.rb
+brew style Casks/conduit.rb
 
-# Create local tap for testing
-brew tap-new local/conduit --no-git
-mkdir -p /opt/homebrew/Library/Taps/local/homebrew-conduit/Casks
-cp ~/0/BREW_DEV/homebrew-conduit/Casks/conduit.rb \
-   /opt/homebrew/Library/Taps/local/homebrew-conduit/Casks/
-
-# Audit and install
-brew audit --cask local/conduit/conduit
-brew install --cask local/conduit/conduit
-
-# Cleanup
-brew uninstall --cask conduit
-brew untap local/conduit
+# Audit cask
+brew audit --cask --online Casks/conduit.rb
 ```
 
 ## Cask Details

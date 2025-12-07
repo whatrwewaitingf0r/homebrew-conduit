@@ -1,0 +1,66 @@
+name: Auto-update Cask
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  update:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest release info
+        id: release
+        run: |
+          RELEASE_JSON=$(curl -s https://api.github.com/repos/lostintangent/conduit-release/releases/latest)
+          VERSION=$(echo "$RELEASE_JSON" | jq -r '.tag_name' | sed 's/^v//')
+          DMG_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name == "Conduit.dmg") | .browser_download_url')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "dmg_url=$DMG_URL" >> $GITHUB_OUTPUT
+
+      - name: Get current version
+        id: current
+        run: |
+          CURRENT=$(grep 'version "' Casks/conduit.rb | sed 's/.*version "\(.*\)"/\1/')
+          echo "version=$CURRENT" >> $GITHUB_OUTPUT
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.release.outputs.version }}" != "${{ steps.current.outputs.version }}" ]; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+            echo "New version available: ${{ steps.release.outputs.version }}"
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+            echo "Already up to date: ${{ steps.current.outputs.version }}"
+          fi
+
+      - name: Download and calculate SHA256
+        if: steps.check.outputs.needed == 'true'
+        id: sha
+        run: |
+          curl -L -o /tmp/Conduit.dmg "${{ steps.release.outputs.dmg_url }}"
+          SHA256=$(shasum -a 256 /tmp/Conduit.dmg | cut -d' ' -f1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Update cask
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          sed -i '' 's/version ".*"/version "${{ steps.release.outputs.version }}"/' Casks/conduit.rb
+          sed -i '' 's/sha256 ".*"/sha256 "${{ steps.sha.outputs.sha256 }}"/' Casks/conduit.rb
+
+      - name: Validate cask
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          brew install --cask Casks/conduit.rb --dry-run || true
+
+      - name: Commit and push
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/conduit.rb
+          git commit -m "conduit: update to ${{ steps.release.outputs.version }}"
+          git push
